@@ -66,13 +66,74 @@ function render(name,data){
   $("sources").innerHTML=data.sources.map(x=>`<li>${x}</li>`).join("");
   $("result").scrollIntoView({behavior:"smooth",block:"start"});
 }
-$("searchForm").addEventListener("submit",e=>{
-  e.preventDefault(); const hit=findItem($("searchInput").value);
-  if(hit) render(...hit); else {
-    $("result").hidden=false;$("title").textContent="עדיין אין ערך מוכן";
-    $("englishName").textContent="נוסיף חיפוש מקוון בשלב הבא";$("yearBadge").textContent="—";
-    $("summary").textContent="בגרסת הבסיס יש מספר המצאות לדוגמה בלבד. המבנה כבר מוכן להרחבה למאגר גדול ולחיפוש אוטומטי.";
-    $("keyFigure").textContent="—";$("others").textContent="—";$("etymology").textContent="—";$("timeline").innerHTML="";$("sources").innerHTML="";
+async function fetchAutomaticInvention(query){
+  const q=(query||"").trim();
+  if(!q) return null;
+  const api="https://he.wikipedia.org/w/api.php?origin=*&action=query&format=json&redirects=1&prop=extracts|pageprops&exintro=1&explaintext=1&generator=search&gsrnamespace=0&gsrlimit=1&gsrsearch="+encodeURIComponent(q);
+  const res=await fetch(api);
+  if(!res.ok) throw new Error("Wikipedia request failed");
+  const json=await res.json();
+  const page=Object.values(json.query?.pages||{})[0];
+  if(!page) return null;
+
+  let keyFigure="לא נמצא במקור מידע חד־משמעי על דמות מכריעה בהמצאה.";
+  let year="—";
+  let others="הערך האוטומטי מבוסס בשלב זה על Wikimedia; מידע על חלוצים נוספים יוצג רק כאשר הוא זמין באופן מובנה.";
+  const qid=page.pageprops?.wikibase_item;
+  if(qid){
+    try{
+      const wd=await fetch("https://www.wikidata.org/wiki/Special:EntityData/"+qid+".json");
+      const entity=(await wd.json()).entities?.[qid];
+      const claims=entity?.claims||{};
+      const inventorIds=(claims.P61||[]).map(x=>x.mainsnak?.datavalue?.value?.id).filter(Boolean);
+      if(inventorIds.length){
+        const labels=await fetch("https://www.wikidata.org/w/api.php?origin=*&action=wbgetentities&format=json&props=labels&languages=he|en&ids="+inventorIds.join("|"));
+        const ents=(await labels.json()).entities||{};
+        const names=inventorIds.map(id=>ents[id]?.labels?.he?.value||ents[id]?.labels?.en?.value||id);
+        keyFigure="Wikidata מציין כממציא/ים: "+names.join(", ")+".";
+      }
+      const dates=[...(claims.P571||[]),...(claims.P575||[])];
+      const time=dates[0]?.mainsnak?.datavalue?.value?.time;
+      if(time){const m=time.match(/[+-](\d{4})/);if(m) year=m[1];}
+    }catch(err){console.warn("Wikidata enrichment failed",err);}
+  }
+  return {
+    english:"",
+    year,
+    summary:page.extract||"לא נמצא תקציר זמין.",
+    keyFigure,
+    others,
+    etymology:"אטימולוגיה אמינה לא נמצאה אוטומטית בשלב זה. לא מוצגת השערה ללא מקור.",
+    timeline:["הערך נמצא אוטומטית בוויקיפדיה העברית.","מידע מובנה על ממציא ותאריך נבדק גם מול Wikidata כאשר הוא זמין."],
+    sources:["ויקיפדיה העברית — "+page.title, qid?"Wikidata — "+qid:"Wikimedia"]
+  };
+}
+
+$("searchForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const query=$("searchInput").value;
+  const hit=findItem(query);
+  if(hit){render(...hit);return;}
+  $("result").hidden=false;
+  $("title").textContent="מחפש…";
+  $("englishName").textContent="בודק מקורות Wikimedia";
+  $("yearBadge").textContent="…";
+  $("summary").textContent="מאתר מידע על ההמצאה.";
+  $("keyFigure").textContent="—";$("others").textContent="—";$("etymology").textContent="—";$("timeline").innerHTML="";$("sources").innerHTML="";
+  try{
+    const data=await fetchAutomaticInvention(query);
+    if(data) render(query.trim(),data);
+    else {
+      $("title").textContent="לא נמצא ערך מתאים";
+      $("englishName").textContent="";
+      $("yearBadge").textContent="—";
+      $("summary").textContent="נסה שם מדויק יותר של ההמצאה, בעברית.";
+    }
+  }catch(err){
+    $("title").textContent="החיפוש המקוון לא זמין כרגע";
+    $("englishName").textContent="";
+    $("yearBadge").textContent="—";
+    $("summary").textContent="אפשר לנסות שוב בעוד רגע. ערכי הדוגמה המקומיים ממשיכים לעבוד גם ללא חיבור.";
   }
 });
 Object.keys(inventions).forEach(name=>{
