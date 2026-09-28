@@ -76,9 +76,9 @@ async function fetchAutomaticInvention(query){
   const page=Object.values(json.query?.pages||{})[0];
   if(!page) return null;
 
-  let keyFigure="לא נמצא במקור מידע חד־משמעי על דמות מכריעה בהמצאה.";
+  let keyFigure="לא נמצא ממציא יחיד באופן חד־משמעי במידע המובנה. ייתכן שההמצאה התפתחה בשלבים ובידי כמה אנשים.";
   let year="—";
-  let others="הערך האוטומטי מבוסס בשלב זה על Wikimedia; מידע על חלוצים נוספים יוצג רק כאשר הוא זמין באופן מובנה.";
+  let others="לא נמצאו כרגע שמות נוספים במידע המובנה. ממציאון נמנע מהוספת שמות ללא מקור ברור.";
   const qid=page.pageprops?.wikibase_item;
   if(qid){
     try{
@@ -100,11 +100,11 @@ async function fetchAutomaticInvention(query){
   return {
     english:"",
     year,
-    summary:page.extract||"לא נמצא תקציר זמין.",
+    summary:(page.extract||"לא נמצא תקציר זמין.").split(/(?<=[.!?])\s+/).slice(0,3).join(" "),
     keyFigure,
     others,
-    etymology:"אטימולוגיה אמינה לא נמצאה אוטומטית בשלב זה. לא מוצגת השערה ללא מקור.",
-    timeline:["הערך נמצא אוטומטית בוויקיפדיה העברית.","מידע מובנה על ממציא ותאריך נבדק גם מול Wikidata כאשר הוא זמין."],
+    etymology:"לא נמצאה אטימולוגיה מאומתת במקורות האוטומטיים. ממציאון אינו משלים מקור שם בהשערה.",
+    timeline:year!=="—"?[year+" — תאריך/תקופה שנמצאו במידע המובנה.","המידע על ההמצאה נבדק מול ויקיפדיה ו-Wikidata."]:["לא נמצא תאריך המצאה חד־משמעי במידע המובנה.","המצאות שהתפתחו בהדרגה עשויות שלא להיות קשורות לשנה אחת."],
     sources:["ויקיפדיה העברית — "+page.title, qid?"Wikidata — "+qid:"Wikimedia"]
   };
 }
